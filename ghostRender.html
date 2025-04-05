@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ghost</title>
+    <style>
+        .flex {
+            display: flex;
+            margin: 30px;
+            flex-direction: row;
+        }
+    </style>
+</head>
+<body>  
+    <div class="flex">
+        <p>A</p>
+        <p>B</p>
+        <p>C</p>
+        <p>D</p>
+        <p>E</p>
+    </div>
+</body>
+<script>
+function ghostRender(element, ...args) {
+    return new Promise((resolve, reject) => {
+        // Error handling for invalid element
+        if (!element || !(element instanceof HTMLElement)) {
+            reject(new Error("Invalid element provided to ghostRender"));
+            return;
+        }
+
+        try {
+            const originalElements = [element, ...element.querySelectorAll("*")];
+            
+            // Capture original element rects before any cloning or modifications
+            const originalElementProperties = originalElements.map(el => ({
+                element: el,
+                rect: el.getBoundingClientRect()
+            }));
+            
+            const clone = element.cloneNode(true);
+            const clonedElements = [clone, ...clone.querySelectorAll("*")];
+            
+            // Simplified mapping - we'll just use indexes since we have arrays of both
+            const renderDiffs = [];
+            
+            // Create mapping function for applying styles later
+            const elementToClone = new Map();
+            for (let i = 0; i < Math.min(originalElements.length, clonedElements.length); i++) {
+                elementToClone.set(originalElements[i], clonedElements[i]);
+            }
+
+            // Use a single requestAnimationFrame cycle
+            requestAnimationFrame(() => {
+                // Create cloneWrapper with proper positioning
+                const cloneWrapper = document.createElement("div");
+                const elementRect = element.getBoundingClientRect();
+                const computedStyle = getComputedStyle(element);
+                const marginLeft = parseInt(computedStyle.marginLeft) || 0;
+                const marginTop = parseInt(computedStyle.marginTop) || 0;
+                
+                // Set up the clone wrapper
+                Object.assign(cloneWrapper.style, {
+                    position: "absolute",
+                    left: `${elementRect.x - marginLeft}px`,
+                    top: `${elementRect.y - marginTop}px`,
+                    visibility: "hidden",
+                    pointerEvents: "none"
+                });
+                
+                clone.removeAttribute('aria-live');
+                cloneWrapper.appendChild(clone);
+                document.body.appendChild(cloneWrapper);
+                
+                // Apply styles to cloned elements
+                args.forEach(([target, styles]) => {
+                    const cloneTarget = elementToClone.get(target);
+                    if (cloneTarget) {
+                        Object.assign(cloneTarget.style, styles);
+                    }
+                });
+                
+                // Now measure the modified clone elements
+                requestAnimationFrame(() => {
+                    try {
+                        // Capture rects of cloned elements after style changes
+                        for (let i = 0; i < Math.min(originalElements.length, clonedElements.length); i++) {
+                            const original = originalElements[i];
+                            const originalRect = originalElementProperties[i].rect;
+                            const cloned = clonedElements[i];
+                            const clonedRect = cloned.getBoundingClientRect();
+                            
+                            // Only add to renderDiffs if the element was in the original array
+                            renderDiffs.push([[original, originalRect], [cloned, clonedRect]]);
+                        }
+                        
+                        // Calculate the differences
+                        const result = renderDiffs.map(diff => ({
+                            element: diff[0][0],
+                            changes: findRectDiff(diff[0][1], diff[1][1])
+                        }));
+                        
+                        // Clean up
+                        cloneWrapper.remove();
+                        resolve(result);
+                    } catch (error) {
+                        cloneWrapper.remove();
+                        reject(error);
+                    }
+                });
+            });
+        } catch (error) {
+            reject(error);
+        }
+    });
+
+    // Helper function to find differences between two rect objects
+    function findRectDiff(prevRect, newRect) {
+        const result = {};
+        for (const key in prevRect) {
+            const prevValue = prevRect[key];
+            const newValue = newRect[key];
+            
+            if (prevValue !== newValue) {
+                result[key] = [prevValue, newValue, prevValue - newValue];
+            } else {
+                result[key] = [prevValue, prevValue, 0]; //FIXME: IDK what i wanted to add 
+            }
+        }
+        return result;
+    }
+}
+
+const root = document.querySelector(".flex")
+ghostRender(root, [root, {flexDirection: "column"}], [root.querySelector("p"), {margin: "10px"}]).then(res => console.log(res))
+
+</script>
+</html>
