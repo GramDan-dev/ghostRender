@@ -122,7 +122,7 @@ function ghostRenderResizeObserver(element, ...args) {
             const cloneElements = [cloneElement, ...cloneElement.querySelectorAll("*")];
             const originalElements = [originalElement, ...originalElement.querySelectorAll("*")];
             
-            const minLength = Math.min(cloneElements.length, originalElements.length);
+            const minLength = cloneElements.length;
             
             for (let i = 0; i < minLength; i++) {
                 const clone = cloneElements[i];
